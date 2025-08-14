@@ -69,6 +69,15 @@ else:
 P = ParamSpec('P')
 logger = sky_logging.init_logger(__name__)
 
+
+def _sync_runpod_api_key(api_key: Optional[str]) -> None:
+    try:
+        from sky.adaptors import runpod as _runpod
+        _runpod.update_api_key(api_key)
+    except Exception:  # Best-effort; adaptor may be unavailable
+        pass
+
+
 # On macOS, the default start method for multiprocessing is 'fork', which
 # can cause issues with certain types of resources, including those used in
 # the QueueManager in mp_queue.py.
@@ -276,6 +285,7 @@ def override_request_env_and_config(
     """Override the environment and SkyPilot config for a request."""
     original_env = os.environ.copy()
     os.environ.update(request_body.env_vars)
+    _sync_runpod_api_key(os.environ.get('RUNPOD_AI_API_KEY'))
     # Note: may be overridden by AuthProxyMiddleware.
     # TODO(zhwu): we need to make the entire request a context available to the
     # entire request execution, so that we can access info like user through
@@ -315,6 +325,7 @@ def override_request_env_and_config(
         # same process for multiple requests.
         os.environ.clear()
         os.environ.update(original_env)
+        _sync_runpod_api_key(original_env.get('RUNPOD_AI_API_KEY'))
 
 
 def _redirect_output(file: TextIO) -> Tuple[int, int]:
@@ -443,6 +454,7 @@ async def execute_request_coroutine(request: api_requests.Request):
     # 1. skypilot config is not contextual
     # 2. envs that read directly from os.environ are not contextual
     ctx.override_envs(request_body.env_vars)
+    _sync_runpod_api_key(request_body.env_vars.get('RUNPOD_AI_API_KEY'))
     fut: asyncio.Future = context_utils.to_thread(func,
                                                   **request_body.to_kwargs())
 

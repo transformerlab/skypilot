@@ -64,6 +64,8 @@ EXTERNAL_LOCAL_ENV_VARS = [
     'GOOGLE_APPLICATION_CREDENTIALS',
     # Allow overriding the kubeconfig.
     'KUBECONFIG',
+    # Allow overriding the RunPod authentication.
+    'RUNPOD_AI_API_KEY',
 ]
 
 

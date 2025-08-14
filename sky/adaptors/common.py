@@ -4,6 +4,7 @@ import importlib
 import threading
 import types
 from typing import Any, Callable, Optional, Tuple
+import inspect
 
 
 class LazyImport(types.ModuleType):
@@ -32,6 +33,24 @@ class LazyImport(types.ModuleType):
         self._set_loggers = set_loggers
         self._lock = threading.RLock()
 
+    def _execute_loggers(self):
+        if self._set_loggers is not None:
+            try:
+                sig = inspect.signature(self._set_loggers)
+                if len([
+                        p for p in sig.parameters.values()
+                        if p.kind in (p.POSITIONAL_ONLY,
+                                      p.POSITIONAL_OR_KEYWORD)
+                    ]) >= 1:
+                    self._set_loggers(self._module)
+                else:
+                    self._set_loggers()
+            except (TypeError, ValueError):
+                try:
+                    self._set_loggers(self._module)
+                except TypeError:
+                    self._set_loggers()
+
     def load_module(self):
         # Avoid extra imports when multiple threads try to import the same
         # module. The overhead is minor since import can only run in serial
@@ -40,8 +59,7 @@ class LazyImport(types.ModuleType):
             if self._module is None:
                 try:
                     self._module = importlib.import_module(self._module_name)
-                    if self._set_loggers is not None:
-                        self._set_loggers()
+                    self._execute_loggers()
                 except ImportError as e:
                     if self._import_error_message is not None:
                         raise ImportError(self._import_error_message) from e
