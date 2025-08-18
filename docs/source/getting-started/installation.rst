@@ -29,7 +29,7 @@ Install SkyPilot using pip:
           pip install "skypilot[azure]"
           pip install "skypilot[oci]"
           pip install "skypilot[lambda]"
-          pip install "skypilot[runpod]"
+          # RunPod has no extra; it's included in base package
           pip install "skypilot[fluidstack]"
           pip install "skypilot[paperspace]"
           pip install "skypilot[cudo]"
@@ -58,7 +58,7 @@ Install SkyPilot using pip:
           pip install "skypilot-nightly[azure]"
           pip install "skypilot-nightly[oci]"
           pip install "skypilot-nightly[lambda]"
-          pip install "skypilot-nightly[runpod]"
+          # RunPod has no extra; it's included in base package
           pip install "skypilot-nightly[fluidstack]"
           pip install "skypilot-nightly[paperspace]"
           pip install "skypilot-nightly[do]"
@@ -91,7 +91,7 @@ Install SkyPilot using pip:
           pip install -e ".[azure]"
           pip install -e ".[oci]"
           pip install -e ".[lambda]"
-          pip install -e ".[runpod]"
+          # RunPod has no extra; it's included in base package
           pip install -e ".[fluidstack]"
           pip install -e ".[paperspace]"
           pip install -e ".[cudo]"
@@ -364,12 +364,17 @@ Vast
 RunPod
 ~~~~~~~~~~
 
-`RunPod <https://runpod.io/>`__ is a specialized AI cloud provider that offers low-cost GPUs. To configure RunPod access, go to the `Settings <https://www.runpod.io/console/user/settings>`_ page on your RunPod console and generate an **API key**. Then, run:
+`RunPod <https://runpod.io/>`__ is a specialized AI cloud provider that offers low-cost GPUs. To configure RunPod access, go to the `Settings <https://www.runpod.io/console/user/settings>`_ page on your RunPod console and generate an **API key**. SkyPilot will pick it up via either:
 
-.. code-block:: shell
+- Environment variable at runtime: set ``RUNPOD_API_KEY`` before launching; or
+- Config file: write a minimal ``~/.runpod/config.toml`` with:
 
-  pip install "runpod>=1.6.1"
-  runpod config
+  .. code-block:: toml
+
+    [default]
+    api_key = "<your_api_key_here>"
+
+No extra packages are required for RunPod.
 
 
 Fluidstack

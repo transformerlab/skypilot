@@ -29,7 +29,7 @@ import sys
 import threading
 import time
 import typing
-from typing import Any, Callable, Generator, List, Optional, TextIO, Tuple
+from typing import Any, Callable, Generator, List, Optional, TextIO, Tuple, Dict
 
 import setproctitle
 
@@ -56,6 +56,8 @@ from sky.utils import subprocess_utils
 from sky.utils import tempstore
 from sky.utils import timeline
 from sky.workspaces import core as workspaces_core
+from pathlib import Path
+import stat
 
 if typing.TYPE_CHECKING:
     import types
@@ -379,7 +381,8 @@ def _request_execution_wrapper(request_id: str,
         # captured in the log file.
         try:
             with override_request_env_and_config(request_body, request_id), \
-                tempstore.tempdir():
+                tempstore.tempdir(), \
+                _inline_credentials_context(request_body.credentials):
                 if sky_logging.logging_enabled(logger, sky_logging.DEBUG):
                     config = skypilot_config.to_dict()
                     logger.debug(f'request config: \n'
@@ -418,6 +421,63 @@ def _request_execution_wrapper(request_id: str,
                 request_id, return_value if not ignore_return_value else None)
             _restore_output(original_stdout, original_stderr)
             logger.info(f'Request {request_id} finished')
+
+
+def _write_file_secure(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('w', encoding='utf-8') as fp:
+        fp.write(content)
+    # Restrict file permissions to user only where applicable
+    try:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    except Exception:  # Some filesystems may not support chmod; ignore.
+        pass
+
+
+@contextlib.contextmanager
+def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
+    """Context that applies per-request inline credentials safely.
+
+    Currently supports RunPod by materializing a temporary config.toml and/or
+    setting a thread-local API key for the adaptor. Additional providers can be
+    added here in a provider-agnostic way.
+    """
+    from sky.adaptors import runpod_client as runpod
+
+    if not credentials or not isinstance(credentials, dict):
+        # No credentials; no-op.
+        yield
+        return
+
+    runpod_creds = credentials.get('runpod')
+    if not isinstance(runpod_creds, dict):
+        yield
+        return
+
+    config_toml: Optional[str] = runpod_creds.get('config_toml')
+    api_key: Optional[str] = runpod_creds.get('api_key')
+    if not config_toml and not api_key:
+        yield
+        return
+
+    # Materialize a request-scoped config file without changing HOME.
+    cfg_dir = Path(tempstore.mkdtemp(prefix='runpod-'))
+    runpod_config_path = cfg_dir / 'config.toml'
+    if config_toml:
+        _write_file_secure(runpod_config_path, config_toml)
+    else:
+        minimal_toml = (
+            "[default]\n"
+            f"api_key = \"{api_key}\"\n"
+        )
+        _write_file_secure(runpod_config_path, minimal_toml)
+
+    # Make it discoverable by code paths that expect SDK-like config loading.
+    os.environ['RUNPOD_CONFIG_PATH'] = str(runpod_config_path)
+
+    # Also inject thread-local API key for explicit usage in the adaptor.
+    with runpod.api_key_context(api_key):
+        yield
 
 
 async def execute_request_coroutine(request: api_requests.Request):

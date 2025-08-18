@@ -1,8 +1,18 @@
-"""RunPod cloud adaptor."""
+"""Compatibility wrapper for RunPod adaptor.
 
-from sky.adaptors import common
+This module used to lazy-import the third-party ``runpod`` SDK. It now forwards
+to ``sky.adaptors.runpod_client`` so the codebase consistently uses the
+thread-safe, request-scoped GraphQL client without importing the old SDK.
 
-runpod = common.LazyImport(
-    'runpod',
-    import_error_message='Failed to import dependencies for RunPod. '
-    'Try running: pip install "skypilot[runpod]"')
+Any imports like ``from sky.adaptors import runpod`` will resolve to the new
+client API (run_graphql_query/get_client/QueryError/InvalidCredentialsError).
+"""
+
+# Re-export the new client API under this module to preserve compatibility.
+from .runpod_client import (  # noqa: F401
+    InvalidCredentialsError,
+    QueryError,
+    get_client,
+    run_graphql_query,
+)
+

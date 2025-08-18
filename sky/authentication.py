@@ -41,7 +41,7 @@ from sky.adaptors import common as adaptors_common
 from sky.adaptors import gcp
 from sky.adaptors import ibm
 from sky.adaptors import kubernetes
-from sky.adaptors import runpod
+from sky.adaptors import runpod_client as runpod
 from sky.adaptors import vast
 from sky.provision.fluidstack import fluidstack_utils
 from sky.provision.kubernetes import utils as kubernetes_utils
@@ -541,7 +541,14 @@ def setup_runpod_authentication(config: Dict[str, Any]) -> Dict[str, Any]:
     _, public_key_path = get_or_generate_keys()
     with open(public_key_path, 'r', encoding='UTF-8') as pub_key_file:
         public_key = pub_key_file.read().strip()
-        runpod.runpod.cli.groups.ssh.functions.add_ssh_key(public_key)
+        # Add SSH key via GraphQL (no-op if duplicate on backend side)
+        mutation = (
+            'mutation { addSshKey(sshKey: "' + public_key.replace('"', '\\"') + '") }'
+        )
+        try:
+            runpod.run_graphql_query(mutation)
+        except Exception as e:
+            logger.debug(f'Failed to add SSH key via RunPod API: {e}')
 
     return configure_ssh_info(config)
 

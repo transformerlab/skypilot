@@ -132,6 +132,12 @@ class RequestBody(BasePayload):
     using_remote_api_server: bool = False
     override_skypilot_config: Optional[Dict[str, Any]] = {}
     override_skypilot_config_path: Optional[str] = None
+    # Optional credentials for cloud providers
+    # Schema (all fields optional):
+    # {
+    #   "runpod": { "api_key": "<key>" },
+    # }
+    credentials: Optional[Dict[str, Any]] = None
 
     def __init__(self, **data):
         data['env_vars'] = data.get('env_vars', request_body_env_vars())
@@ -164,6 +170,7 @@ class RequestBody(BasePayload):
         kwargs.pop('using_remote_api_server')
         kwargs.pop('override_skypilot_config')
         kwargs.pop('override_skypilot_config_path')
+        kwargs.pop('credentials')
         return kwargs
 
     @property
