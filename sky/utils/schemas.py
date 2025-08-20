@@ -1558,9 +1558,12 @@ def get_config_schema():
     allowed_workspace_cloud_names = list(constants.ALL_CLOUDS) + ['cloudflare']
     # Create pattern for not supported clouds, i.e.
     # all clouds except gcp, kubernetes, ssh
+    # Clouds explicitly supported with richer workspace config blocks.
+    _supported_workspace_clouds = ['gcp', 'kubernetes', 'ssh', 'nebius',
+                                   'azure', 'runpod']
     not_supported_clouds = [
         cloud for cloud in allowed_workspace_cloud_names
-        if cloud.lower() not in ['gcp', 'kubernetes', 'ssh', 'nebius']
+        if cloud.lower() not in _supported_workspace_clouds
     ]
     not_supported_cloud_regex = '|'.join(not_supported_clouds)
     workspaces_schema = {
@@ -1650,6 +1653,55 @@ def get_config_schema():
                         },
                         'disabled': {
                             'type': 'boolean'
+                        },
+                    },
+                    'additionalProperties': False,
+                },
+                'azure': {
+                    'type': 'object',
+                    'required': [],
+                    'properties': {
+                        # Service principal authentication via environment
+                        # variables is common; allow specifying here per-workspace.
+                        'tenant_id': {
+                            'type': 'string',
+                        },
+                        'client_id': {
+                            'type': 'string',
+                        },
+                        'client_secret': {
+                            'type': 'string',
+                        },
+                        'subscription_id': {
+                            'type': 'string',
+                        },
+                        'disabled': {
+                            'type': 'boolean',
+                        },
+                    },
+                    'additionalProperties': False,
+                },
+                'runpod': {
+                    'type': 'object',
+                    'required': [],
+                    'properties': {
+                        # Inline credentials for RunPod. Either api_key or
+                        # a full config TOML can be provided.
+                        'credentials': {
+                            'type': 'object',
+                            'required': [],
+                            'additionalProperties': False,
+                            'properties': {
+                                'api_key': {'type': 'string'},
+                                'config_toml': {'type': 'string'},
+                            },
+                        },
+                        # For convenience, allow top-level api_key/config_toml
+                        # (will be treated identically to credentials.*).
+                        'api_key': {'type': 'string'},
+                        'config_toml': {'type': 'string'},
+                        'disabled': {
+                            'type': 'boolean',
                         },
                     },
                     'additionalProperties': False,

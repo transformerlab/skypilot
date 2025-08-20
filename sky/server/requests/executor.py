@@ -273,8 +273,8 @@ def _get_queue(schedule_type: api_requests.ScheduleType) -> RequestQueue:
 
 @contextlib.contextmanager
 def override_request_env_and_config(
-        request_body: payloads.RequestBody,
-        request_id: str) -> Generator[None, None, None]:
+    request_body: payloads.RequestBody,
+    request_id: str) -> Generator[None, None, None]:
     """Override the environment and SkyPilot config for a request."""
     original_env = os.environ.copy()
     os.environ.update(request_body.env_vars)
@@ -300,7 +300,7 @@ def override_request_env_and_config(
     try:
         logger.debug(
             f'override path: {request_body.override_skypilot_config_path}')
-        with skypilot_config.override_skypilot_config(
+    with skypilot_config.override_skypilot_config(
                 request_body.override_skypilot_config,
                 request_body.override_skypilot_config_path):
             # Rejecting requests to workspaces that the user does not have
@@ -444,21 +444,50 @@ def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
     """
     from sky.adaptors import runpod_client as runpod
 
-    if not credentials or not isinstance(credentials, dict):
-        # No credentials; no-op.
+    # Merge workspace-scoped credentials if present in the loaded config.
+    # Request-specified credentials take precedence.
+    merged: Dict[str, Any] = {}
+    if isinstance(credentials, dict):
+        merged.update(credentials)
+
+    # Workspace-level provider creds
+    try:
+        cfg = skypilot_config.to_dict()
+        ws = cfg.get('active_workspace', constants.SKYPILOT_DEFAULT_WORKSPACE)
+        ws_cfg = cfg.get('workspaces', {}).get(ws, {}) if isinstance(cfg, dict) else {}
+    except Exception:  # be resilient: missing config shouldn't break requests
+        ws_cfg = {}
+
+    # RunPod: support workspace.workspaces.<ws>.runpod.{api_key,config_toml,credentials}
+    runpod_ws = ws_cfg.get('runpod') if isinstance(ws_cfg, dict) else None
+    if isinstance(runpod_ws, dict):
+        rp_inline = runpod_ws.get('credentials') if isinstance(runpod_ws.get('credentials'), dict) else {}
+        # Normalize top-level api_key/config_toml into credentials dict
+        if 'api_key' in runpod_ws and 'api_key' not in rp_inline:
+            rp_inline = dict(rp_inline, api_key=runpod_ws['api_key'])
+        if 'config_toml' in runpod_ws and 'config_toml' not in rp_inline:
+            rp_inline = dict(rp_inline, config_toml=runpod_ws['config_toml'])
+        if rp_inline:
+            merged.setdefault('runpod', {}).update(rp_inline)
+
+    # Azure: workspace.workspaces.<ws>.azure.{tenant_id,client_id,client_secret,subscription_id}
+    azure_ws = ws_cfg.get('azure') if isinstance(ws_cfg, dict) else None
+    if isinstance(azure_ws, dict):
+        # Only set if not already provided by request's env. Avoid overriding.
+        os.environ.setdefault('AZURE_TENANT_ID', azure_ws.get('tenant_id', '') or os.environ.get('AZURE_TENANT_ID', ''))
+        os.environ.setdefault('AZURE_CLIENT_ID', azure_ws.get('client_id', '') or os.environ.get('AZURE_CLIENT_ID', ''))
+        os.environ.setdefault('AZURE_CLIENT_SECRET', azure_ws.get('client_secret', '') or os.environ.get('AZURE_CLIENT_SECRET', ''))
+        os.environ.setdefault('AZURE_SUBSCRIPTION_ID', azure_ws.get('subscription_id', '') or os.environ.get('AZURE_SUBSCRIPTION_ID', ''))
+
+    # Apply RunPod inline credentials if available after merge.
+    rp = merged.get('runpod') if isinstance(merged, dict) else None
+    if not isinstance(rp, dict) or (not rp.get('config_toml') and not rp.get('api_key')):
+        # Nothing to apply; still allow Azure envs set above.
         yield
         return
 
-    runpod_creds = credentials.get('runpod')
-    if not isinstance(runpod_creds, dict):
-        yield
-        return
-
-    config_toml: Optional[str] = runpod_creds.get('config_toml')
-    api_key: Optional[str] = runpod_creds.get('api_key')
-    if not config_toml and not api_key:
-        yield
-        return
+    config_toml: Optional[str] = rp.get('config_toml')
+    api_key: Optional[str] = rp.get('api_key')
 
     # Materialize a request-scoped config file without changing HOME.
     cfg_dir = Path(tempstore.mkdtemp(prefix='runpod-'))
@@ -472,10 +501,8 @@ def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
         )
         _write_file_secure(runpod_config_path, minimal_toml)
 
-    # Make it discoverable by code paths that expect SDK-like config loading.
     os.environ['RUNPOD_CONFIG_PATH'] = str(runpod_config_path)
 
-    # Also inject thread-local API key for explicit usage in the adaptor.
     with runpod.api_key_context(api_key):
         yield
 
