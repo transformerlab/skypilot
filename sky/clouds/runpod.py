@@ -282,23 +282,23 @@ class RunPod(clouds.Cloud):
     def _check_credentials(cls) -> Tuple[bool, Optional[str]]:
         """ Verify that the user has valid credentials for RunPod. """
         try:
-            import runpod  # pylint: disable=import-outside-toplevel
-            valid, error = runpod.check_credentials()
-
-            if not valid:
+            from sky.adaptors import runpod_client as runpod
+            # Validate by attempting a lightweight API call
+            try:
+                ok = runpod.get_client().validate_api_key()
+            except runpod.InvalidCredentialsError:
+                ok = False
+            if not ok:
                 return False, (
-                    f'{error} \n'  # First line is indented by 4 spaces
-                    '    Credentials can be set up by running: \n'
-                    f'        $ pip install runpod \n'
-                    f'        $ runpod config\n'
-                    '    For more information, see https://docs.skypilot.co/en/latest/getting-started/installation.html#runpod'  # pylint: disable=line-too-long
+                    'Invalid or missing RunPod credentials.\n'
+                    '    Set RUNPOD_API_KEY or create ~/.runpod/config.toml with:\n'
+                    '        [default]\n'
+                    '        api_key = "<YOUR_API_KEY>"\n'
+                    '    For more information, see https://docs.skypilot.co/en/latest/getting-started/installation.html#runpod'
                 )
-
             return True, None
-
-        except ImportError:
-            return False, ('Failed to import runpod. '
-                           'To install, run: pip install skypilot[runpod]')
+        except Exception as e:  # pylint: disable=broad-except
+            return False, (f'Failed to validate RunPod credentials: {e}')
 
     def get_credential_file_mounts(self) -> Dict[str, str]:
         return {

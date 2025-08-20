@@ -384,6 +384,7 @@ async def launch(
     no_setup: bool = False,
     clone_disk_from: Optional[str] = None,
     fast: bool = False,
+    credentials: Optional[Dict[str, Any]] = None,
     # Internal only:
     # pylint: disable=invalid-name
     _need_confirmation: bool = False,
@@ -396,7 +397,7 @@ async def launch(
     request_id = await context_utils.to_thread(
         sdk.launch, task, cluster_name, retry_until_up,
         idle_minutes_to_autostop, dryrun, down, backend, optimize_target,
-        no_setup, clone_disk_from, fast, _need_confirmation,
+        no_setup, clone_disk_from, fast, credentials, _need_confirmation,
         _is_launched_by_jobs_controller, _is_launched_by_sky_serve_controller,
         _disable_controller_check)
     if stream_logs is not None:
@@ -470,9 +471,11 @@ async def start(
 async def down(
         cluster_name: str,
         purge: bool = False,
+        credentials: Optional[Dict[str, Any]] = None,
         stream_logs: Optional[StreamConfig] = DEFAULT_STREAM_CONFIG) -> None:
     """Async version of down() that tears down a cluster."""
-    request_id = await context_utils.to_thread(sdk.down, cluster_name, purge)
+    request_id = await context_utils.to_thread(
+        sdk.down, cluster_name, purge, credentials)
     if stream_logs is not None:
         return await _stream_and_get(request_id, stream_logs)
     else:
@@ -484,9 +487,11 @@ async def down(
 async def stop(
         cluster_name: str,
         purge: bool = False,
+        credentials: Optional[Dict[str, Any]] = None,
         stream_logs: Optional[StreamConfig] = DEFAULT_STREAM_CONFIG) -> None:
     """Async version of stop() that stops a cluster."""
-    request_id = await context_utils.to_thread(sdk.stop, cluster_name, purge)
+    request_id = await context_utils.to_thread(
+        sdk.stop, cluster_name, purge, credentials)
     if stream_logs is not None:
         return await _stream_and_get(request_id, stream_logs)
     else:

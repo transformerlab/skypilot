@@ -5,7 +5,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from sky import sky_logging
-from sky.adaptors import runpod
+from sky.adaptors import runpod_client as runpod
 from sky.provision import docker_utils
 from sky.provision.runpod.api import commands as runpod_commands
 from sky.skylet import constants
@@ -88,7 +88,7 @@ def retry(func):
         while True:
             try:
                 return func(*args, **kwargs)
-            except runpod.runpod.error.QueryError as e:
+            except runpod.QueryError as e:
                 if cnt >= 3:
                     raise
                 logger.warning('Retrying for exception: '
@@ -148,7 +148,7 @@ def _sky_get_pods() -> dict:
 
     Adapted from runpod.get_pods() to include containerRegistryAuthId.
     """
-    raw_return = runpod.runpod.api.graphql.run_graphql_query(_QUERY_POD)
+    raw_return = runpod.run_graphql_query(_QUERY_POD)
     cleaned_return = raw_return['data']['myself']['pods']
     return cleaned_return
 
@@ -167,8 +167,7 @@ query myself {
 
 def _list_pod_templates_with_container_registry() -> dict:
     """List all pod templates."""
-    raw_return = runpod.runpod.api.graphql.run_graphql_query(
-        _QUERY_POD_TEMPLATE_WITH_REGISTRY_AUTH)
+    raw_return = runpod.run_graphql_query(_QUERY_POD_TEMPLATE_WITH_REGISTRY_AUTH)
     return raw_return['data']['myself']['podTemplates']
 
 
@@ -209,9 +208,9 @@ def list_instances() -> Dict[str, Dict[str, Any]]:
 def delete_pod_template(template_name: str) -> None:
     """Deletes a pod template."""
     try:
-        runpod.runpod.api.graphql.run_graphql_query(
+        runpod.run_graphql_query(
             f'mutation {{deleteTemplate(templateName: "{template_name}")}}')
-    except runpod.runpod.error.QueryError as e:
+    except runpod.QueryError as e:
         logger.warning(f'Failed to delete template {template_name}: {e} '
                        'Please delete it manually.')
 
@@ -219,8 +218,8 @@ def delete_pod_template(template_name: str) -> None:
 def delete_register_auth(registry_auth_id: str) -> None:
     """Deletes a registry auth."""
     try:
-        runpod.runpod.delete_container_registry_auth(registry_auth_id)
-    except runpod.runpod.error.QueryError as e:
+        runpod.get_client().delete_container_registry_auth(registry_auth_id)
+    except runpod.QueryError as e:
         logger.warning(
             f'Failed to delete registry auth {registry_auth_id}: {e} '
             'Please delete it manually.')
@@ -249,18 +248,18 @@ def _create_template_for_docker_login(
     # TODO(tian): Now we create a template and a registry auth for each cluster.
     # Consider create one for each server and reuse them. Challenges including
     # calculate the reference count and delete them when no longer needed.
-    create_auth_resp = runpod.runpod.create_container_registry_auth(
+    create_auth_resp = runpod.get_client().add_container_registry_auth(
         name=container_registry_auth_name,
         username=login_config.username,
         password=login_config.password,
     )
-    registry_auth_id = create_auth_resp['id']
-    create_template_resp = runpod.runpod.create_template(
+    registry_auth_id = create_auth_resp
+    create_template_resp = runpod.get_client().create_template(
         name=container_template_name,
         image_name=None,
         registry_auth_id=registry_auth_id,
     )
-    return login_config.format_image(image_name), create_template_resp['id']
+    return login_config.format_image(image_name), create_template_resp
 
 
 def launch(cluster_name: str, node_type: str, instance_type: str, region: str,
@@ -349,17 +348,17 @@ def launch(cluster_name: str, node_type: str, instance_type: str, region: str,
         gpu_type = GPU_NAME_MAP[instance_type.split('_')[1]]
         gpu_quantity = int(instance_type.split('_')[0].replace('x', ''))
         cloud_type = instance_type.split('_')[2]
-        gpu_specs = runpod.runpod.get_gpu(gpu_type)
         params.update({
             'gpu_type_id': gpu_type,
             'cloud_type': cloud_type,
             'min_vcpu_count': 4 * gpu_quantity,
-            'min_memory_in_gb': gpu_specs['memoryInGb'] * gpu_quantity,
+            # Omit min_memory_in_gb to allow backend defaults; legacy used GPU memory.
             'gpu_count': gpu_quantity,
         })
 
+    client = runpod.get_client()
     if preemptible is None or not preemptible:
-        new_instance = runpod.runpod.create_pod(**params)
+        new_instance = client.create_pod(**params)
     else:
         new_instance = runpod_commands.create_spot_pod(
             bid_per_gpu=bid_per_gpu,
@@ -383,7 +382,7 @@ def get_registry_auth_resources(
 
 def remove(instance_id: str) -> None:
     """Terminates the given instance."""
-    runpod.runpod.terminate_pod(instance_id)
+    runpod.get_client().terminate_pod(instance_id)
 
 
 def get_ssh_ports(cluster_name) -> List[int]:

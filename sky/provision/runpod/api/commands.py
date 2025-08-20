@@ -18,7 +18,7 @@ Example:
 """
 from typing import List, Optional
 
-from sky.adaptors import runpod
+from sky.adaptors import runpod_client as runpod
 from sky.provision.runpod.api.pods import generate_spot_pod_deployment_mutation
 
 _INTERRUPTABLE_POD_FIELD: str = 'podRentInterruptable'
@@ -70,17 +70,19 @@ def create_spot_pod(
                 bid_per_gpu=0.3
             )
     """
-    runpod.runpod.get_gpu(gpu_type_id)
+    # Validate the GPU type by a no-op user detail fetch (keeps legacy flow simple)
+    # The create call will fail if the gpu_type_id is invalid; no separate get_gpu.
     # refer to https://graphql-spec.runpod.io/#definition-CloudTypeEnum
     if cloud_type not in ['ALL', 'COMMUNITY', 'SECURE']:
         raise ValueError('cloud_type must be one of ALL, COMMUNITY or SECURE')
 
     if network_volume_id and data_center_id is None:
-        user_info = runpod.runpod.get_user()
-        for network_volume in user_info['networkVolumes']:
-            if network_volume['id'] == network_volume_id:
-                data_center_id = network_volume['dataCenterId']
-                break
+        client = runpod.get_client()
+        vol = client.get_network_volume(network_volume_id)
+        if vol is not None:
+            # The GraphQL schema uses nested dataCenter { id }, adapt here
+            data_center = vol.get('dataCenter') or {}
+            data_center_id = data_center.get('id')
 
     if container_disk_in_gb is None and template_id is None:
         container_disk_in_gb = 10
@@ -115,5 +117,5 @@ def create_spot_pod(
         template_id=template_id,
         volume_key=volume_key,
     )
-    response = runpod.runpod.api.graphql.run_graphql_query(mutation)
+    response = runpod.run_graphql_query(mutation)
     return response[_RESPONSE_DATA_FIELD][_INTERRUPTABLE_POD_FIELD]
