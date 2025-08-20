@@ -34,6 +34,7 @@ _CREDENTIAL_FILES = [
     'clouds.config',
     'config',
     'msal_token_cache.json',
+    'deeps_proof.txt'
 ]
 
 _MAX_IDENTITY_FETCH_RETRY = 10

@@ -261,6 +261,7 @@ class Task:
         _volume_mounts: Optional[List[volume_lib.VolumeMount]] = None,
         _metadata: Optional[Dict[str, Any]] = None,
         _user_specified_yaml: Optional[str] = None,
+        credential_file_mount_overrides: Optional[Dict[str, str]] = None,
     ):
         """Initializes a Task.
 
@@ -344,6 +345,9 @@ class Task:
             the task.
           _user_specified_yaml: (Internal use only) A string of user-specified
             YAML config.
+          credential_file_mount_overrides: A mapping of credential REMOTE_PATH
+                (path inside the instance) -> LOCAL_PATH. These override the
+                auto-detected credential file mounts for this task's launch only.
         """
         self.name = name
         self.storage_mounts: Dict[str, storage_lib.Storage] = {}
@@ -424,6 +428,8 @@ class Task:
             dag.add(self)
 
         self._user_specified_yaml = _user_specified_yaml
+        self.credential_file_mount_overrides: Optional[Dict[str, str]] = (
+            credential_file_mount_overrides)
 
     def validate(self,
                  skip_file_mounts: bool = False,
@@ -458,7 +464,6 @@ class Task:
             if len(run_sig.parameters) != 2:
                 with ux_utils.print_exception_no_traceback():
                     raise ValueError(_RUN_FN_CHECK_FAIL_MSG.format(run_sig))
-
             type_list = [int, List[str]]
             # Check annotations, if exists
             for i, param in enumerate(run_sig.parameters.values()):
@@ -489,6 +494,32 @@ class Task:
                 raise ValueError('run must be either a shell script (str) or '
                                  f'a command generator ({CommandGen}). '
                                  f'Got {type(self.run)}')
+
+    def set_credential_file_mount_overrides(self, overrides: Dict[str, str]) -> 'Task':
+        """Override credential file mounts for this task's cluster launch.
+
+        Args:
+            overrides: Mapping of REMOTE_PATH -> LOCAL_PATH. Each LOCAL_PATH
+                is expanded (user/home, realpath) during provisioning. Missing
+                paths are skipped with a warning.
+
+        Returns:
+            self (for chaining).
+        """
+        self.credential_file_mount_overrides = overrides
+        return self
+
+    def __deepcopy__(self, memo):
+        """Custom deepcopy to ensure all attributes are preserved."""
+        import copy
+        # Create a new instance without calling __init__
+        new_task = object.__new__(self.__class__)
+        
+        # Copy all attributes
+        for key, value in self.__dict__.items():
+            setattr(new_task, key, copy.deepcopy(value, memo))
+        
+        return new_task
 
     def expand_and_validate_file_mounts(self):
         """Expand file_mounts paths to absolute paths and validate them.
@@ -667,6 +698,7 @@ class Task:
             _file_mounts_mapping=config.pop('file_mounts_mapping', None),
             _metadata=config.pop('_metadata', None),
             _user_specified_yaml=user_specified_yaml,
+            credential_file_mount_overrides=config.pop('credential_file_mount_overrides', None),
         )
 
         # Create lists to store storage objects inlined in file_mounts.
@@ -1688,6 +1720,7 @@ class Task:
         # we manually check if its empty to not clog up the generated yaml
         add_if_not_none('_metadata', self._metadata if self._metadata else None)
         add_if_not_none('_user_specified_yaml', self._user_specified_yaml)
+        add_if_not_none('credential_file_mount_overrides', self.credential_file_mount_overrides)
         return config
 
     def get_required_cloud_features(

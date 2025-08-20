@@ -109,6 +109,7 @@ def check_capabilities(
                 _, cloud = cloud_tuple
                 try:
                     ok, reason = cloud.check_credentials(capability)
+                    
                 except exceptions.NotSupportedError:
                     return None
                 except Exception:  # pylint: disable=broad-except

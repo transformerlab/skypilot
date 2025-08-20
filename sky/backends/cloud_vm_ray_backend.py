@@ -1348,6 +1348,7 @@ class RetryingVmProvisioner(object):
         prev_cluster_ever_up: bool,
         skip_if_config_hash_matches: Optional[str],
         volume_mounts: Optional[List[volume_lib.VolumeMount]],
+        task: task_lib.Task,
     ) -> Dict[str, Any]:
         """The provision retry loop.
 
@@ -1458,6 +1459,7 @@ class RetryingVmProvisioner(object):
                     dryrun=dryrun,
                     keep_launch_fields_in_existing_config=cluster_exists,
                     volume_mounts=volume_mounts,
+                    task=task,
                 )
             except exceptions.ResourcesUnavailableError as e:
                 # Failed due to catalog issue, e.g. image not found, or
@@ -2122,6 +2124,7 @@ class RetryingVmProvisioner(object):
                     prev_cluster_ever_up=prev_cluster_ever_up,
                     skip_if_config_hash_matches=skip_if_config_hash_matches,
                     volume_mounts=task.volume_mounts,
+                    task=task,
                 )
                 if dryrun:
                     return config_dict
