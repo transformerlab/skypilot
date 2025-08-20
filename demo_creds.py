@@ -96,11 +96,12 @@ if __name__ == "__main__":
 					res_kwargs.update(instance_type=args.instance_type)
 				else:
 					res_kwargs.update(cpus=args.cpus)
+				if args.disk_size:
+					res_kwargs.update(disk_size=args.disk_size)
 			else:
 				# Request a specific accelerator (default: L4)
 				res_kwargs.update(accelerators={args.gpu: args.gpu_count})
-			if args.disk_size:
-				res_kwargs.update(disk_size=args.disk_size)
+
 			task.set_resources(sky.Resources(**res_kwargs))
 
 			try:

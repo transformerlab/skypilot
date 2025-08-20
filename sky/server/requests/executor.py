@@ -300,13 +300,13 @@ def override_request_env_and_config(
     try:
         logger.debug(
             f'override path: {request_body.override_skypilot_config_path}')
-    with skypilot_config.override_skypilot_config(
-                request_body.override_skypilot_config,
-                request_body.override_skypilot_config_path):
-            # Rejecting requests to workspaces that the user does not have
-            # permission to access.
-            workspaces_core.reject_request_for_unauthorized_workspace(user)
-            yield
+        with skypilot_config.override_skypilot_config(
+                    request_body.override_skypilot_config,
+                    request_body.override_skypilot_config_path):
+                # Rejecting requests to workspaces that the user does not have
+                # permission to access.
+                workspaces_core.reject_request_for_unauthorized_workspace(user)
+                yield
     finally:
         # We need to call the save_timeline() since atexit will not be
         # triggered as multiple requests can be sharing the same process.
