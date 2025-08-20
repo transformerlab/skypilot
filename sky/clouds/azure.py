@@ -556,13 +556,16 @@ class Azure(clouds.Cloud):
         # This file is required because it will be synced to remote VMs for
         # `az` to access private storage buckets.
         # `az account show` does not guarantee this file exists.
-        azure_token_cache_file = '~/.azure/msal_token_cache.json'
-        if not os.path.isfile(os.path.expanduser(azure_token_cache_file)):
+        from sky.adaptors import azure as azure_adaptor
+        azure_config_dir = azure_adaptor.get_azure_config_dir()
+        azure_token_cache_file = os.path.join(azure_config_dir, 'msal_token_cache.json')
+        if not os.path.isfile(azure_token_cache_file):
             return (False,
                     f'{azure_token_cache_file} does not exist.' + help_str)
 
         try:
-            _run_output('az --version')
+            from sky.adaptors import azure as azure_adaptor
+            azure_adaptor.run_azure_cli_with_config('az --version')
         except subprocess.CalledProcessError as e:
             return False, (
                 # TODO(zhwu): Change the installation hint to from PyPI.
@@ -597,8 +600,19 @@ class Azure(clouds.Cloud):
 
     def get_credential_file_mounts(self) -> Dict[str, str]:
         """Returns a dict of credential file paths to mount paths."""
+        from sky.adaptors import azure as azure_adaptor
+        
+        # Check if we have service principal credentials
+        service_principal_creds = azure_adaptor._get_thread_azure_credentials()
+        if service_principal_creds:
+            # When using service principal credentials, no file mounts needed
+            return {}
+        
+        # Use custom Azure config directory if specified
+        azure_config_dir = azure_adaptor.get_azure_config_dir()
+        
         return {
-            f'~/.azure/{filename}': f'~/.azure/{filename}'
+            f'{azure_config_dir}/{filename}': f'~/.azure/{filename}'
             for filename in _CREDENTIAL_FILES
         }
 
