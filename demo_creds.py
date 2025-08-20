@@ -1,3 +1,4 @@
+
 """RunPod inline credentials integration demo.
 
 Creates a tiny RunPod cluster via SkyPilot with an API key passed inline.
@@ -53,6 +54,8 @@ if __name__ == "__main__":
 						help="Preferred data center/zone ID in the region. Optional.")
 	parser.add_argument("--retry-until-up", dest="retry_until_up", action="store_true",
 						help="Keep retrying until capacity is found.")
+	parser.add_argument("--custom-credentials-override", dest="custom_credentials_override", action="store_true",
+						help="Use the custom credentials override dict")
 	args = parser.parse_args()
 
 	api_key = args.api_key or os.environ.get("RUNPOD_API_KEY")
@@ -65,6 +68,14 @@ if __name__ == "__main__":
 
 	# Hardcode the demo cluster name.
 	cluster_name = args.cluster_name
+
+	credentials_override_dict = {
+		"~/.azure/azureProfile.json": "~/transformerlab-repos/skypilot-new/skypilot/azure_stuff/azureProfile.json",
+		"~/.azure/clouds.config": "~/transformerlab-repos/skypilot-new/skypilot/azure_stuff/clouds.config",
+		"~/.azure/config": "~/transformerlab-repos/skypilot-new/skypilot/azure_stuff/config",
+		"~/.azure/msal_token_cache.json": "~/transformerlab-repos/skypilot-new/skypilot/azure_stuff/msal_token_cache.json",
+		"~/.azure/deeps_proof.txt": "~/transformerlab-repos/skypilot-new/skypilot/azure_stuff/deeps_proof.txt"
+	}
 
 	# Inline credentials ride along with the request to the API server.
 	creds = {"runpod": {"api_key": api_key}}
@@ -83,7 +94,13 @@ if __name__ == "__main__":
 		else:
 			mode = "CPU-only" if args.cpu_only else f"GPU ({args.gpu} x{args.gpu_count})"
 			print(f"[demo] Launching on RunPod as cluster: {cluster_name} [{mode}]")
-			task = sky.Task(run='echo "hello from $(hostname)" && sleep 5')
+			if args.custom_credentials_override:
+				task = sky.Task(run='echo "hello from $(hostname)" && sleep 5', credential_file_mount_overrides=credentials_override_dict)
+				print("PERFORMING OVERRIDE")
+			else:
+				task = sky.Task(run='echo "hello from $(hostname)" && sleep 5')
+				print("NO OVERRIDE")
+			print(f"[demo] Task: {task}")
 			# Build resources: GPU by default (L4), or CPU-only if requested.
 			res_kwargs = dict(
 				cloud=sky.RunPod(),
@@ -122,4 +139,3 @@ if __name__ == "__main__":
 			except Exception as e:
 				print(f"[demo] Launch FAILED: {e}")
 				raise
-
