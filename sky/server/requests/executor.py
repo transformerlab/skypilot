@@ -455,6 +455,12 @@ def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
     runpod_creds = credentials.get('runpod')
     azure_creds = credentials.get('azure')
     
+    # Track what we set up for cleanup
+    runpod_config_path_set = False
+    azure_config_dir_set = False
+    azure_service_principal_set = False
+    original_runpod_config_path = os.environ.get('RUNPOD_CONFIG_PATH')
+    
     try:
         # Set up RunPod credentials
         if isinstance(runpod_creds, dict):
@@ -475,6 +481,7 @@ def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
 
                 # Make it discoverable by code paths that expect SDK-like config loading.
                 os.environ['RUNPOD_CONFIG_PATH'] = str(runpod_config_path)
+                runpod_config_path_set = True
 
         # Set up Azure credentials in thread-local storage ONLY
         if isinstance(azure_creds, dict):
@@ -485,10 +492,12 @@ def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
                 from sky.adaptors import azure as azure_adaptor
                 # Set thread-local Azure config directory (thread-safe)
                 azure_adaptor.set_thread_azure_config_dir(azure_config_dir)
-            elif service_principal:
+                azure_config_dir_set = True
+            if service_principal:
                 from sky.adaptors import azure as azure_adaptor
                 # Set thread-local service principal credentials (thread-safe)
                 azure_adaptor.set_thread_azure_credentials(service_principal)
+                azure_service_principal_set = True
 
         # Use RunPod API key context if available
         if isinstance(runpod_creds, dict):
@@ -501,13 +510,20 @@ def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
         else:
             yield
     finally:
+        # Clean up RunPod environment variable
+        if runpod_config_path_set:
+            if original_runpod_config_path is None:
+                os.environ.pop('RUNPOD_CONFIG_PATH', None)
+            else:
+                os.environ['RUNPOD_CONFIG_PATH'] = original_runpod_config_path
+        
         # Clean up Azure thread-local storage
-        if isinstance(azure_creds, dict):
+        if azure_config_dir_set:
             from sky.adaptors import azure as azure_adaptor
-            if azure_creds.get('config_dir'):
-                azure_adaptor.clear_thread_azure_config_dir()
-            elif azure_creds.get('service_principal'):
-                azure_adaptor.clear_thread_azure_credentials()
+            azure_adaptor.clear_thread_azure_config_dir()
+        if azure_service_principal_set:
+            from sky.adaptors import azure as azure_adaptor
+            azure_adaptor.clear_thread_azure_credentials()
 
 
 async def execute_request_coroutine(request: api_requests.Request):
