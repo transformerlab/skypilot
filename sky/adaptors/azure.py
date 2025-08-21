@@ -212,7 +212,6 @@ def get_client(name: str,
     # First try to get service principal credential
     credential = get_azure_service_principal_credential()
     sky_logger.debug(f"Service principal credential in get_client: {credential is not None}")
-    print("SERVICE CREDENTIAL:", credential)
 
     if credential is None:
         # Fall back to Azure CLI credential
@@ -607,7 +606,6 @@ def create_azure_service_principal_credential(credentials: Dict[str, str]):
 def get_azure_service_principal_credential():
     """Get Azure credential from thread-local service principal credentials."""
     credentials = _get_thread_azure_credentials()
-    print("CREDENTIALS", credentials)
     if credentials is None:
         return None
     
