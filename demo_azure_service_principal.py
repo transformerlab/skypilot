@@ -13,7 +13,7 @@ def main():
     parser.add_argument('--subscription-id', required=True, help='Azure subscription ID')
     parser.add_argument('--cluster-name', default='azure-sp-test', help='Cluster name to use')
     parser.add_argument('--down', action='store_true', help='Tear down the cluster instead of launching')
-    parser.add_argument('--instance-type', default='Standard_E16s_v5', help='Azure instance type (default: Standard_E16s_v5)')
+    parser.add_argument('--instance-type', default='Standard_D2s_v5', help='Azure instance type (default: Standard_E16s_v5)')
     parser.add_argument('--region', default='westus', help='Azure region (default: westus)')
     parser.add_argument('--dryrun', action='store_true', help='Perform a dry run only (no provisioning)')
     parser.add_argument('--use-spot', action='store_true', help='Use spot instance if available')
