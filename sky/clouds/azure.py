@@ -546,6 +546,42 @@ class Azure(clouds.Cloud):
     @classmethod
     def _check_credentials(cls) -> Tuple[bool, Optional[str]]:
         """Checks if the user has access credentials to this cloud."""
+        from sky.adaptors import azure as azure_adaptor
+        
+        # First check if we have service principal credentials in the current context
+        service_principal_creds = azure_adaptor._get_thread_azure_credentials()
+        if service_principal_creds:
+            try:
+                # Check if the azure blob storage dependencies are installed.
+                import importlib.util
+                if (importlib.util.find_spec('azure.storage.blob') is None or 
+                    importlib.util.find_spec('msgraph') is None):
+                    raise ImportError("azure.storage.blob or msgraph not available")
+                
+                # Verify service principal credentials work by testing authentication
+                credential = azure_adaptor.create_azure_service_principal_credential(service_principal_creds)
+                subscription_id = service_principal_creds.get('subscription_id')
+                if subscription_id:
+                    # Test the credentials by trying to create a resource management client
+                    from azure.mgmt.resource import ResourceManagementClient
+                    client = ResourceManagementClient(credential, subscription_id)
+                    # This will raise an exception if credentials are invalid
+                    list(client.resource_groups.list())
+                    return True, None
+                    
+            except ImportError as e:
+                return False, (
+                    f'Azure blob storage dependencies are not installed. '
+                    'Run the following commands:'
+                    f'\n{cls._INDENT_PREFIX}  $ pip install skypilot[azure]'
+                    f'\n{cls._INDENT_PREFIX}Details: '
+                    f'{common_utils.format_exception(e)}')
+            except Exception as e:
+                return False, (
+                    f'Service principal credentials failed: '
+                    f'{common_utils.format_exception(e)}')
+        
+        # Fall back to standard Azure CLI check
         help_str = (
             ' Run the following commands:'
             f'\n{cls._INDENT_PREFIX}  $ az login'
@@ -556,7 +592,6 @@ class Azure(clouds.Cloud):
         # This file is required because it will be synced to remote VMs for
         # `az` to access private storage buckets.
         # `az account show` does not guarantee this file exists.
-        from sky.adaptors import azure as azure_adaptor
         azure_config_dir = azure_adaptor.get_azure_config_dir()
         azure_token_cache_file = os.path.join(azure_config_dir, 'msal_token_cache.json')
         if not os.path.isfile(azure_token_cache_file):
@@ -564,7 +599,6 @@ class Azure(clouds.Cloud):
                     f'{azure_token_cache_file} does not exist.' + help_str)
 
         try:
-            from sky.adaptors import azure as azure_adaptor
             azure_adaptor.run_azure_cli_with_config('az --version')
         except subprocess.CalledProcessError as e:
             return False, (
@@ -586,9 +620,10 @@ class Azure(clouds.Cloud):
 
         # Check if the azure blob storage dependencies are installed.
         try:
-            # pylint: disable=redefined-outer-name, import-outside-toplevel, unused-import
-            from azure.storage import blob
-            import msgraph
+            import importlib.util
+            if (importlib.util.find_spec('azure.storage.blob') is None or 
+                importlib.util.find_spec('msgraph') is None):
+                raise ImportError("azure.storage.blob or msgraph not available")
         except ImportError as e:
             return False, (
                 f'Azure blob storage depdencies are not installed. '
