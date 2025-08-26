@@ -29,7 +29,7 @@ import sys
 import threading
 import time
 import typing
-from typing import Any, Callable, Generator, List, Optional, TextIO, Tuple
+from typing import Any, Callable, Generator, List, Optional, TextIO, Tuple, Dict
 
 import setproctitle
 
@@ -56,6 +56,8 @@ from sky.utils import subprocess_utils
 from sky.utils import tempstore
 from sky.utils import timeline
 from sky.workspaces import core as workspaces_core
+from pathlib import Path
+import stat
 
 if typing.TYPE_CHECKING:
     import types
@@ -379,7 +381,8 @@ def _request_execution_wrapper(request_id: str,
         # captured in the log file.
         try:
             with override_request_env_and_config(request_body, request_id), \
-                tempstore.tempdir():
+                tempstore.tempdir(), \
+                _inline_credentials_context(request_body.credentials):
                 if sky_logging.logging_enabled(logger, sky_logging.DEBUG):
                     config = skypilot_config.to_dict()
                     logger.debug(f'request config: \n'
@@ -418,6 +421,58 @@ def _request_execution_wrapper(request_id: str,
                 request_id, return_value if not ignore_return_value else None)
             _restore_output(original_stdout, original_stderr)
             logger.info(f'Request {request_id} finished')
+
+
+def _write_file_secure(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('w', encoding='utf-8') as fp:
+        fp.write(content)
+    # Restrict file permissions to user only where applicable
+    try:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    except Exception:  # Some filesystems may not support chmod; ignore.
+        pass
+
+
+@contextlib.contextmanager
+def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
+    """Context that applies per-request inline credentials safely.
+    Additional providers can be added here in a provider-agnostic way.
+    """
+    if not credentials or not isinstance(credentials, dict):
+        # No credentials; no-op.
+        yield
+        return
+
+    azure_creds = credentials.get('azure')
+    
+    azure_config_dir_set = False
+    azure_service_principal_set = False
+    
+    try:
+        # Set up Azure credentials in thread-local storage ONLY
+        if isinstance(azure_creds, dict):
+            azure_config_dir = azure_creds.get('config_dir')
+            service_principal = azure_creds.get('service_principal')
+            
+            if azure_config_dir:
+                from sky.adaptors import azure as azure_adaptor
+                # Set thread-local Azure config directory (thread-safe)
+                azure_adaptor.set_thread_azure_config_dir(azure_config_dir)
+                azure_config_dir_set = True
+            if service_principal:
+                from sky.adaptors import azure as azure_adaptor
+                # Set thread-local service principal credentials (thread-safe)
+                azure_adaptor.set_thread_azure_credentials(service_principal)
+                azure_service_principal_set = True
+    finally:        
+        # Clean up Azure thread-local storage
+        if azure_config_dir_set:
+            from sky.adaptors import azure as azure_adaptor
+            azure_adaptor.clear_thread_azure_config_dir()
+        if azure_service_principal_set:
+            from sky.adaptors import azure as azure_adaptor
+            azure_adaptor.clear_thread_azure_credentials()
 
 
 async def execute_request_coroutine(request: api_requests.Request):
