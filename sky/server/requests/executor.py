@@ -437,52 +437,19 @@ def _write_file_secure(path: Path, content: str) -> None:
 @contextlib.contextmanager
 def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
     """Context that applies per-request inline credentials safely.
-
-    Currently supports RunPod by materializing a temporary config.toml and/or
-    setting a thread-local API key for the adaptor, and Azure by providing
-    either a custom Azure config directory or service principal credentials
-    via thread-local storage only (no env vars). 
     Additional providers can be added here in a provider-agnostic way.
     """
-    from sky.adaptors import runpod_client as runpod
-
     if not credentials or not isinstance(credentials, dict):
         # No credentials; no-op.
         yield
         return
 
-    # Handle RunPod credentials
-    runpod_creds = credentials.get('runpod')
     azure_creds = credentials.get('azure')
     
-    # Track what we set up for cleanup
-    runpod_config_path_set = False
     azure_config_dir_set = False
     azure_service_principal_set = False
-    original_runpod_config_path = os.environ.get('RUNPOD_CONFIG_PATH')
     
     try:
-        # Set up RunPod credentials
-        if isinstance(runpod_creds, dict):
-            config_toml: Optional[str] = runpod_creds.get('config_toml')
-            api_key: Optional[str] = runpod_creds.get('api_key')
-            if config_toml or api_key:
-                # Materialize a request-scoped config file without changing HOME.
-                cfg_dir = Path(tempstore.mkdtemp(prefix='runpod-'))
-                runpod_config_path = cfg_dir / 'config.toml'
-                if config_toml:
-                    _write_file_secure(runpod_config_path, config_toml)
-                else:
-                    minimal_toml = (
-                        "[default]\n"
-                        f"api_key = \"{api_key}\"\n"
-                    )
-                    _write_file_secure(runpod_config_path, minimal_toml)
-
-                # Make it discoverable by code paths that expect SDK-like config loading.
-                os.environ['RUNPOD_CONFIG_PATH'] = str(runpod_config_path)
-                runpod_config_path_set = True
-
         # Set up Azure credentials in thread-local storage ONLY
         if isinstance(azure_creds, dict):
             azure_config_dir = azure_creds.get('config_dir')
@@ -498,25 +465,7 @@ def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
                 # Set thread-local service principal credentials (thread-safe)
                 azure_adaptor.set_thread_azure_credentials(service_principal)
                 azure_service_principal_set = True
-
-        # Use RunPod API key context if available
-        if isinstance(runpod_creds, dict):
-            api_key = runpod_creds.get('api_key')
-            if api_key:
-                with runpod.api_key_context(api_key):
-                    yield
-            else:
-                yield
-        else:
-            yield
-    finally:
-        # Clean up RunPod environment variable
-        if runpod_config_path_set:
-            if original_runpod_config_path is None:
-                os.environ.pop('RUNPOD_CONFIG_PATH', None)
-            else:
-                os.environ['RUNPOD_CONFIG_PATH'] = original_runpod_config_path
-        
+    finally:        
         # Clean up Azure thread-local storage
         if azure_config_dir_set:
             from sky.adaptors import azure as azure_adaptor

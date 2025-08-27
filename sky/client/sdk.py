@@ -505,7 +505,7 @@ def launch(
         fast: [Experimental] If the cluster is already up and available,
           skip provisioning and setup steps.
                 credentials: Optional inline credentials to materialize on the API
-                    server for this launch (e.g., {"runpod": {"api_key": "..."}}).
+                    server for this launch.
         _need_confirmation: (Internal only) If True, show the confirmation
             prompt.
 
@@ -1068,7 +1068,7 @@ def down(cluster_name: str,
 
     Args:
         credentials: Optional inline credentials to materialize on the API
-            server for this request (e.g., {"runpod": {"api_key": "..."}}).
+            server for this request.
 
     Returns:
         The request ID of the down request.
@@ -1121,7 +1121,7 @@ def stop(cluster_name: str,
 
     Args:
         credentials: Optional inline credentials to materialize on the API
-            server for this request (e.g., {"runpod": {"api_key": "..."}}).
+            server for this request.
 
     Returns:
         The request ID of the stop request.
