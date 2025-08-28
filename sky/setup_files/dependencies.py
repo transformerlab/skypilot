@@ -171,9 +171,7 @@ extras_require: Dict[str, List[str]] = {
     ],
     'ssh': ['kubernetes>=20.0.0,!=32.0.0', 'websockets', 'python-dateutil'],
     'remote': remote,
-    # For the container registry auth api. Reference:
-    # https://github.com/runpod/runpod-python/releases/tag/1.6.1
-    'runpod': ['runpod>=1.6.1'],
+    # 'runpod' extra removed: we use an internal RunPod client (no external SDK dep)
     'fluidstack': [],  # No dependencies needed for fluidstack
     'cudo': ['cudo-compute>=0.1.10'],
     'paperspace': [],  # No dependencies needed for paperspace

@@ -918,6 +918,15 @@ def get_task_schema():
             '_metadata': {
                 'type': 'object',
             },
+            'credential_file_mount_overrides': {
+                'type': 'object',
+                'patternProperties': {
+                    '.*': {
+                        'type': 'string'
+                    }
+                },
+                'additionalProperties': False,
+            },
             **_experimental_task_schema(),
         }
     }
