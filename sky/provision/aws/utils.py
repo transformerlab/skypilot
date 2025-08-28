@@ -33,6 +33,14 @@ def handle_boto_error(exc: Exception, msg: str) -> None:
         'RequestExpired',
         'InvalidClientTokenId',
         'InvalidClientToken',
+        # Common auth/permission failures indicating unusable credentials
+        'AuthFailure',
+        'UnauthorizedOperation',
+        'UnrecognizedClientException',
+        'AccessDenied',
+        'AccessDeniedException',
+        'SignatureDoesNotMatch',
+        'MissingAuthenticationToken',
     ]
 
     if error_code in invalid_credentials_codes:
@@ -82,5 +90,10 @@ def handle_boto_error(exc: Exception, msg: str) -> None:
 
     logger.fatal(generic_message)
     logger.fatal('')
-    logger.error(f'Boto3 error: {vars(exc)} {exec}')
-    raise SystemExit(1)
+    try:
+        err_type = type(exc).__name__
+    except Exception:  # pylint: disable=broad-except
+        err_type = 'AWSException'
+    raise exceptions.CloudError(message=generic_message,
+                                cloud_provider='aws',
+                                error_type=err_type) from exc
