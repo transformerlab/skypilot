@@ -465,7 +465,8 @@ def _inline_credentials_context(credentials: Optional[Dict[str, Any]]):
                 # Set thread-local service principal credentials (thread-safe)
                 azure_adaptor.set_thread_azure_credentials(service_principal)
                 azure_service_principal_set = True
-    finally:        
+        yield
+    finally:
         # Clean up Azure thread-local storage
         if azure_config_dir_set:
             from sky.adaptors import azure as azure_adaptor
