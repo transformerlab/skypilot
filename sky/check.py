@@ -403,6 +403,24 @@ def get_cached_enabled_clouds_or_refresh(
         # If any error occurs while checking service principal credentials, 
         # continue with normal flow
         pass
+
+    # Check if we have inline RunPod API key that would enable RunPod
+    try:
+        from sky.adaptors import runpod as runpod_adaptor
+        runpod_api_key = runpod_adaptor._get_thread_runpod_api_key()
+        if runpod_api_key:
+            runpod_in_cache = any(isinstance(cloud, sky_clouds.RunPod)
+                                  for cloud in cached_enabled_clouds)
+            if not runpod_in_cache:
+                runpod_cloud = sky_clouds.RunPod()
+                try:
+                    is_enabled, _ = runpod_cloud._check_credentials()
+                    if is_enabled:
+                        force_refresh = True
+                except Exception:
+                    pass
+    except Exception:
+        pass
     
     if not cached_enabled_clouds or allowed_clouds_changed or force_refresh:
         try:

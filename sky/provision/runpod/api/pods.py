@@ -1,5 +1,5 @@
 """This module provides functions to generate GraphQL mutations for deploying
-spot instance Pods on RunPod.
+pods on RunPod.
 
 Reference:
     https://github.com/runpod/runpod-python/blob/main/runpod/api/mutations/pods.py
@@ -140,3 +140,4 @@ def generate_spot_pod_deployment_mutation(
       }}
     }}
     """
+
